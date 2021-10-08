@@ -39,15 +39,3 @@
     (let ((args (jingoh.args keys)))
       (declare (special args))
       (call-next-method))))
-;; Enable importing spec documentations.
-(let ((system (find-system "jingoh.documentizer" nil)))
-  (when system
-    (load-system system)
-    (defmethod perform :after
-               ((o load-op) (c (eql (find-system "with-x-iterator"))))
-      (with-muffled-conditions (*uninteresting-conditions*)
-        (handler-case (symbol-call :jingoh.documentizer :import c)
-                      (error (condition)
-                             (warn "Fails to import documentation of ~S.~%~A"
-                                   (coerce-name c)
-                                   (princ-to-string condition))))))))
