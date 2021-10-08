@@ -16,7 +16,7 @@
 ;;;; * Macro name must be WITH-<name>-ITERATOR.
 ;;;; * Macro API must be ((name <object>) &body body)
 ;;;; * Name must become generator-macro. (e.g. `(macrolet ((,name () ...))))
-;;;; * Name macro must return three values as (values has-next? key object)
+;;;; * Name macro must return three values as (values more? key object)
 ;;;;
 ;;;; In short words, each macros are follow CL:WITH-HASH-TABLE-ITERATOR behavior.
 
@@ -25,10 +25,11 @@
     `(let ((,?temp ,<list>) (,?index 0))
        (macrolet ((,name ()
                     (let ((?car (gensym "CAR")))
-                      `(let ((,?car (car ,',?temp)))
-                         (values (not (endp (setq ,',?temp (cdr ,',?temp))))
-                                 (prog1 ,',?index (incf ,',?index))
-                                 ,?car)))))
+                      `(unless (endp ,',?temp)
+                         (let ((,?car (car ,',?temp)))
+                           (values (prog1 t (setq ,',?temp (cdr ,',?temp)))
+                                   (prog1 ,',?index (incf ,',?index))
+                                   ,?car))))))
          ,@body))))
 
 (defmacro with-vector-iterator ((name <vector>) &body body)
@@ -36,10 +37,11 @@
     `(let ((,?vector ,<vector>) (,?index 0))
        (macrolet ((,name ()
                     (let ((?elt (gensym "ELT")))
-                      `(let ((,?elt (aref ,',?vector ,',?index)))
-                         (values (array-in-bounds-p ,',?vector (1+ ,',?index))
-                                 (prog1 ,',?index (incf ,',?index))
-                                 ,?elt)))))
+                      `(when (array-in-bounds-p ,',?vector ,',?index)
+                         (let ((,?elt (aref ,',?vector ,',?index)))
+                           (values t
+                                   (prog1 ,',?index (incf ,',?index))
+                                   ,?elt))))))
          ,@body))))
 
 (defmacro with-plist-iterator ((name <plist>) &body body)
@@ -47,10 +49,11 @@
     `(let ((,?plist ,<plist>))
        (macrolet ((,name ()
                     (let ((?key (gensym "KEY")) (?value (gensym "VALUE")))
-                      `(let ((,?key (car ,',?plist)) (,?value (cadr ,',?plist)))
-                         (values (not (endp (setq ,',?plist (cddr ,',?plist))))
-                                 ,?key
-                                 ,?value)))))
+                      `(unless (endp ,',?plist)
+                         (let ((,?key (car ,',?plist))
+                               (,?value (cadr ,',?plist)))
+                           (setq ,',?plist (cddr ,',?plist))
+                           (values t ,?key ,?value))))))
          ,@body))))
 
 (defmacro with-alist-iterator ((name <alist>) &body body)
@@ -58,10 +61,10 @@
     `(let ((,?alist ,<alist>))
        (macrolet ((,name ()
                     (let ((?pair (gensym "PAIR")))
-                      `(let ((,?pair (car ,',?alist)))
-                         (values (not (endp (setq ,',?alist (cdr ,',?alist))))
-                                 (car ,?pair)
-                                 (cdr ,?pair))))))
+                      `(unless (endp ,',?alist)
+                         (let ((,?pair (car ,',?alist)))
+                           (setq ,',?alist (cdr ,',?alist))
+                           (values t (car ,?pair) (cdr ,?pair)))))))
          ,@body))))
 
 (defmacro with-sequence-iterator ((name <sequence>) &body body)
@@ -71,8 +74,9 @@
     `(let* ((,?sequence ,<sequence>) (,?index 0) (,?length (length ,?sequence)))
        (macrolet ((,name ()
                     (let ((?elt (gensym "ELT")))
-                      `(let ((,?elt (elt ,',?sequence ,',?index)))
-                         (values (< (1+ ,',?index) ,',?length)
-                                 (prog1 ,',?index (incf ,',?index))
-                                 ,?elt)))))
+                      `(when (< ,',?index ,',?length)
+                         (let ((,?elt (elt ,',?sequence ,',?index)))
+                           (values t
+                                   (prog1 ,',?index (incf ,',?index))
+                                   ,?elt))))))
          ,@body))))
