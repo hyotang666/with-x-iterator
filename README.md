@@ -20,8 +20,6 @@ CL:WITH-HASH-TABLE-ITERATOR like macros for other data structures.
 ## Usage
 API are inherited from [cl:with-hash-table-iterator](http://clhs.lisp.se/Body/m_w_hash.htm).
 
-If macro name has suffix `*`, first return value of each generator macro call means entry remains.
-
 ## From developer
 
 ### Product's goal
