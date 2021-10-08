@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "with-x-iterator"
   :version
-  "1.0.1"
+  "2.0.0"
   :author "SATO Shinichi"
   :description "CL:WITH-HASH-TABLE-ITERATOR like macros for other data structures."
   :license "Public domain"
