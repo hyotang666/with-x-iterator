@@ -15,6 +15,17 @@
 
 (in-package :with-x-iterator)
 
+(defun rebuild-declare (bind env)
+  (let ((vars
+         (intersection bind
+                       (tcr.parse-declarations-1.0:declaration-env.affected-variables
+                         env))))
+    (when vars
+      (tcr.parse-declarations-1.0:build-declarations 'declare
+                                                     (tcr.parse-declarations-1.0:filter-declaration-env
+                                                       env
+                                                       :affecting vars)))))
+
 (defmacro do+ ((&rest bind*) (&rest end) &body body)
   "(DO+ ({([ Value-var | (Key-var Value-var) ] Generator)}+) (Test Exit-form*) Declaration* Form*)"
   ;; Trivial-syntax-checking.
@@ -30,30 +41,33 @@
         (?generators (alexandria:make-gensym-list (length bind*))))
     (multiple-value-bind (forms decls)
         (alexandria:parse-body body)
-      `(prog ,(mapcar (lambda (?generator bind) `(,?generator ,(cadr bind)))
-                      ?generators bind*)
-        ,?top
-        ,@(labels ((<iteration> (binds vars generators)
-                     (if (endp binds)
-                         `((tagbody
-                             (when (or ,@(mapcar (lambda (?end) `(null ,?end))
-                                                 ?ends)
-                                       ,(car end))
-                               (return ,@(cdr end)))
-                             (locally ,@decls ,@forms)
-                             (go ,?top)))
-                         (let ((bind (bind (car binds))))
-                           `((multiple-value-bind (,(car vars) ,@bind)
-                                 (funcall ,(car generators))
-                               ,@(unless (eq bind (caar binds))
-                                   `((declare (ignore ,(car bind)))))
-                               ,@(<iteration> (cdr binds) (cdr vars)
-                                              (cdr generators)))))))
-                   (bind (bind)
-                     (etypecase (car bind)
-                       (symbol (list (gensym "KEY") (car bind)))
-                       (cons (car bind)))))
-            (<iteration> bind* ?ends ?generators))))))
+      (let ((decl-env (tcr.parse-declarations-1.0:parse-declarations decls)))
+        `(prog ,(mapcar (lambda (?generator bind) `(,?generator ,(cadr bind)))
+                        ?generators bind*)
+          ,?top
+          ,@(labels ((<iteration> (binds vars generators)
+                       (if (endp binds)
+                           `((tagbody
+                               (when (or ,@(mapcar
+                                             (lambda (?end) `(null ,?end))
+                                             ?ends)
+                                         ,(car end))
+                                 (return ,@(cdr end)))
+                              ,@forms
+                               (go ,?top)))
+                           (let ((bind (bind (car binds))))
+                             `((multiple-value-bind (,(car vars) ,@bind)
+                                   (funcall ,(car generators))
+                                 ,@(unless (eq bind (caar binds))
+                                     `((declare (ignore ,(car bind)))))
+                                 ,@(rebuild-declare bind decl-env)
+                                 ,@(<iteration> (cdr binds) (cdr vars)
+                                                (cdr generators)))))))
+                     (bind (bind)
+                       (etypecase (car bind)
+                         (symbol (list (gensym "KEY") (car bind)))
+                         (cons (car bind)))))
+              (<iteration> bind* ?ends ?generators)))))))
 
 (defun list-generator (list)
   (let ((index 0))

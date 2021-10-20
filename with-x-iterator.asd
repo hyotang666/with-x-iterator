@@ -2,14 +2,15 @@
 (in-package :asdf)
 (defsystem "with-x-iterator"
   :version
-  "4.0.1"
+  "4.0.2"
   :author "SATO Shinichi"
   :description "Trivial Iterator/Generator."
   :license "MIT"
   :depends-on
   (
-   "alexandria"         ; Utilities.
-   "cl-form-types"      ; Introspecition for environment.
+   "alexandria"                 ; Utilities.
+   "cl-form-types"              ; Introspecition for environment.
+   "parse-declarations-1.0"     ; Parser of declarations implicitly depends on via cl-form-types.
    )
   :pathname
   "src/"
