@@ -36,7 +36,7 @@ Trivial Iterator/Generator.
   (print var))
 ```
 
-Syntax: (DO+ ({([ Value-var | (Key-var Value-var) ])}+) (Test Exit-form\*) Declaration\* Form\*)
+Syntax: (DO+ ({([ Value-var | (Key-var Value-var) ] Generator)}+) (Test Exit-form\*) Declaration\* Form\*)
 
 For minimizing the learning cost, with-x-iterator does not provide any useful clauses.
 
