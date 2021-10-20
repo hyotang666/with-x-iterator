@@ -87,12 +87,28 @@
              (get?)))
       #'generate)))
 
+(defun integer-generator (&key (start 0) limit (stepper #'1+) (limitter #'<))
+  (if limit
+      (let ((step start) (index 0))
+        (lambda ()
+          (if (funcall limitter step limit)
+              (values t
+                      (prog1 index (incf index))
+                      (prog1 step (setq step (funcall stepper step))))
+              nil)))
+      (let ((step start) (index 0))
+        (lambda ()
+          (values t
+                  (prog1 index (incf index))
+                  (prog1 step (setq step (funcall stepper step))))))))
+
 (defgeneric generator (thing)
   (:documentation "Return (FUNCTION () (VALUES Existsp Key Value)).")
   (:method ((thing list)) (list-generator thing))
   (:method ((thing vector)) (vector-generator thing))
   (:method ((thing sequence)) (sequence-generator thing))
-  (:method ((thing hash-table)) (hash-table-generator thing)))
+  (:method ((thing hash-table)) (hash-table-generator thing))
+  (:method ((thing integer)) (integer-generator :limit thing)))
 
 (define-compiler-macro generator (&whole whole thing &environment env)
   (let ((type (cl-form-types:form-type thing env)))
@@ -100,4 +116,5 @@
           ((subtypep type 'list) `(list-generator ,thing))
           ((subtypep type 'sequence) `(sequence-generator ,thing))
           ((subtypep type 'hash-table) `(hash-table-generator ,thing))
+          ((subtypep type 'integer) `(integer-generator :limit ,thing))
           (t whole))))
