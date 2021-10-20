@@ -2,12 +2,15 @@
 (in-package :asdf)
 (defsystem "with-x-iterator"
   :version
-  "3.0.0"
+  "4.0.0"
   :author "SATO Shinichi"
-  :description "CL:WITH-HASH-TABLE-ITERATOR like macros for other data structures."
-  :license "Public domain"
+  :description "Trivial Iterator/Generator."
+  :license "MIT"
   :depends-on
-  nil
+  (
+   "alexandria"         ; Utilities.
+   "cl-form-types"      ; Introspecition for environment.
+   )
   :pathname
   "src/"
   :components

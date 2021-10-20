@@ -2,85 +2,102 @@
 
 (defpackage :with-x-iterator
   (:use :cl)
-  (:export #:with-list-iterator
-           #:with-vector-iterator
-           #:with-plist-iterator
-           #:with-alist-iterator
-           #:with-sequence-iterator))
+  (:export ;;;; Main API
+           ;;; Iterator.
+           #:do+
+           ;; Generator.
+           #:generator)
+  (:export ;;;; Underlying helper.
+           #:list-generator
+           #:vector-generator
+           #:sequence-generator
+           #:hash-table-generator))
 
 (in-package :with-x-iterator)
 
-;;;;
-;;;; Protocols.
-;;;;
-;;;; * Macro name must be WITH-<name>-ITERATOR.
-;;;; * Macro API must be ((name <object>) &body body)
-;;;; * Name must become generator-macro. (e.g. `(macrolet ((,name () ...))))
-;;;; * Name macro must return three values as (values more? key object)
-;;;;
-;;;; In short words, each macros are follow CL:WITH-HASH-TABLE-ITERATOR behavior.
+(defmacro do+ ((&rest bind*) (&rest end) &body body)
+  "(DO+ ({([ Value-var | (Key-var Value-var) ] Generator)}+) (Test Exit-form*) Declaration* Form*)"
+  ;; Trivial-syntax-checking.
+  (assert (< 0 (length bind*)))
+  (loop :for bind :in bind*
+        :do (check-type (car bind)
+                        (or symbol
+                            (cons (and symbol (not (or keyword boolean)))
+                                  (cons (and symbol (not (or keyword boolean)))
+                                        null)))))
+  (let ((?ends (alexandria:make-gensym-list (length bind*)))
+        (?top (gensym "ITER"))
+        (?generators (alexandria:make-gensym-list (length bind*))))
+    (multiple-value-bind (forms decls)
+        (alexandria:parse-body body)
+      `(prog ,(mapcar (lambda (?generator bind) `(,?generator ,(cadr bind)))
+                      ?generators bind*)
+        ,?top
+        ,@(labels ((<iteration> (binds vars generators)
+                     (if (endp binds)
+                         `((tagbody
+                             (when (or ,@(mapcar (lambda (?end) `(null ,?end))
+                                                 ?ends)
+                                       ,(car end))
+                               (return ,@(cdr end)))
+                             (locally ,@decls ,@forms)
+                             (go ,?top)))
+                         (let ((bind (bind (car binds))))
+                           `((multiple-value-bind (,(car vars) ,@bind)
+                                 (funcall ,(car generators))
+                               ,@(unless (eq bind (caar binds))
+                                   `((declare (ignore ,(car bind)))))
+                               ,@(<iteration> (cdr binds) (cdr vars)
+                                              (cdr generators)))))))
+                   (bind (bind)
+                     (etypecase (car bind)
+                       (symbol (list (gensym "KEY") (car bind)))
+                       (cons (car bind)))))
+            (<iteration> bind* ?ends ?generators))))))
 
-(defmacro with-list-iterator ((name <list>) &body body)
-  (let ((?temp (gensym "TEMP")) (?index (gensym "INDEX")))
-    `(let ((,?temp ,<list>) (,?index 0))
-       (declare (type (mod #.most-positive-fixnum))
-                ,?index)
-       (macrolet ((,name ()
-                    (let ((?car (gensym "CAR")))
-                      `(unless (endp ,',?temp)
-                         (let ((,?car (car ,',?temp)))
-                           (values (prog1 t (setq ,',?temp (cdr ,',?temp)))
-                                   (prog1 ,',?index (incf ,',?index))
-                                   ,?car))))))
-         ,@body))))
+(defun list-generator (list)
+  (let ((index 0))
+    (flet ((generate ()
+             (if (endp list)
+                 nil
+                 (values t
+                         (prog1 index (incf index))
+                         (prog1 (car list) (setq list (cdr list)))))))
+      #'generate)))
 
-(defmacro with-vector-iterator ((name <vector>) &body body)
-  (let ((?vector (gensym "VECTOR")) (?index (gensym "INDEX")))
-    `(let ((,?vector ,<vector>) (,?index 0))
-       (declare (type (mod #.array-total-size-limit) ,?index))
-       (macrolet ((,name ()
-                    (let ((?elt (gensym "ELT")))
-                      `(when (array-in-bounds-p ,',?vector ,',?index)
-                         (let ((,?elt (aref ,',?vector ,',?index)))
-                           (values t
-                                   (prog1 ,',?index (incf ,',?index))
-                                   ,?elt))))))
-         ,@body))))
+(defun vector-generator (vector)
+  (let ((index 0))
+    (flet ((generate ()
+             (if (array-in-bounds-p vector index)
+                 (values t index (aref vector (prog1 index (incf index))))
+                 nil)))
+      #'generate)))
 
-(defmacro with-plist-iterator ((name <plist>) &body body)
-  (let ((?plist (gensym "PLIST")))
-    `(let ((,?plist ,<plist>))
-       (macrolet ((,name ()
-                    (let ((?key (gensym "KEY")) (?value (gensym "VALUE")))
-                      `(unless (endp ,',?plist)
-                         (let ((,?key (car ,',?plist))
-                               (,?value (cadr ,',?plist)))
-                           (setq ,',?plist (cddr ,',?plist))
-                           (values t ,?key ,?value))))))
-         ,@body))))
+(defun sequence-generator (sequence)
+  (let ((length (length sequence)) (index 0))
+    (flet ((generate ()
+             (if (= index length)
+                 nil
+                 (values t index (elt sequence (prog1 index (incf index)))))))
+      #'generate)))
 
-(defmacro with-alist-iterator ((name <alist>) &body body)
-  (let ((?alist (gensym "ALIST")))
-    `(let ((,?alist ,<alist>))
-       (macrolet ((,name ()
-                    (let ((?pair (gensym "PAIR")))
-                      `(unless (endp ,',?alist)
-                         (let ((,?pair (car ,',?alist)))
-                           (setq ,',?alist (cdr ,',?alist))
-                           (values t (car ,?pair) (cdr ,?pair)))))))
-         ,@body))))
+(defun hash-table-generator (hash-table)
+  (with-hash-table-iterator (get? hash-table)
+    (flet ((generate ()
+             (get?)))
+      #'generate)))
 
-(defmacro with-sequence-iterator ((name <sequence>) &body body)
-  (let ((?sequence (gensym "SEQUENCE"))
-        (?index (gensym "INDEX"))
-        (?length (gensym "LENGTH")))
-    `(let* ((,?sequence ,<sequence>) (,?index 0) (,?length (length ,?sequence)))
-       (declare (type (mod #.most-positive-fixnum) ,?index))
-       (macrolet ((,name ()
-                    (let ((?elt (gensym "ELT")))
-                      `(when (< ,',?index ,',?length)
-                         (let ((,?elt (elt ,',?sequence ,',?index)))
-                           (values t
-                                   (prog1 ,',?index (incf ,',?index))
-                                   ,?elt))))))
-         ,@body))))
+(defgeneric generator (thing)
+  (:documentation "Return (FUNCTION () (VALUES Existsp Key Value)).")
+  (:method ((thing list)) (list-generator thing))
+  (:method ((thing vector)) (vector-generator thing))
+  (:method ((thing sequence)) (sequence-generator thing))
+  (:method ((thing hash-table)) (hash-table-generator thing)))
+
+(define-compiler-macro generator (&whole whole thing &environment env)
+  (let ((type (cl-form-types:form-type thing env)))
+    (cond ((subtypep type 'vector) `(vector-generator ,thing))
+          ((subtypep type 'list) `(list-generator ,thing))
+          ((subtypep type 'sequence) `(sequence-generator ,thing))
+          ((subtypep type 'hash-table) `(hash-table-generator ,thing))
+          (t whole))))
