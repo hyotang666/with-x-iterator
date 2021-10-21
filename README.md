@@ -9,7 +9,7 @@ Trivial Iterator/Generator.
 | [iterate]            | 54               | Yes         | No       |
 | [for]                | 85               | Yes         | Yes      |
 | [cl-enumeration]     | 33               | Yes         | Yes      |
-| [cl-tertools]        | 36               | Yes         | Yes      |
+| [cl-itertools]        | 36               | Yes         | Yes      |
 | [iterator-protocol]  | 5                | Yes         | Yes      |
 | [doplus]             | 50               | Yes         | No       |
 | [picl]               | 31               | Yes         | Yes      |
@@ -20,7 +20,7 @@ Trivial Iterator/Generator.
 [iterate]: https://gitlab.common-lisp.net/iterate/iterate
 [for]: https://github.com/Shinmera/for
 [cl-enumeration]: https://gitlab.common-lisp.net/cl-enumeration/enumerations
-[cl-tertools]: https://github.com/mabragor/cl-itertools
+[cl-itertools]: https://github.com/mabragor/cl-itertools
 [iterator-protocol]: https://github.com/jaeschliman/com.clearly-useful.iterator-protocol
 [doplus]: https://github.com/alessiostalla/doplus
 [picl]: https://github.com/anlsh/picl
