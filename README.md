@@ -161,7 +161,7 @@ Example of a generator to generate random value.
 2. I wrote the code like `(dolist (elt (struct-data struct)) ...)`.
 3. Ooops, I had to change slot data types.
 4. I must change many places in my code base.
-5. I reflected on it, so I wrote tiny abstraction barriar `(defmacro dodata (o) \`(dolist (elt (struct-data ,o)) ...))`.
+5. I reflected on it, so I wrote tiny abstraction barriar ``(defmacro dodata (o) `(dolist (elt (struct-data ,o)) ...))``.
 6. Ooops, I got name confliction, e.g. `dodata` for `(defstruct obj (data nil :type list))`.
 7. I realized what I want is generic looping.
 8. [series], [iterate] and [doplus] is not good due to not generic.
