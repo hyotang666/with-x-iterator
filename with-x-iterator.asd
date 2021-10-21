@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "with-x-iterator"
   :version
-  "5.0.0"
+  "5.0.1"
   :author "SATO Shinichi"
   :description "Trivial Iterator/Generator."
   :license "MIT"
