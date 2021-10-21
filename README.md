@@ -14,7 +14,7 @@ Trivial Iterator/Generator.
 | [doplus]             | 50               | Yes         | No       |
 | [picl]               | 31               | Yes         | Yes      |
 | [trivial-do]         | 6                | No          | No       |
-| with-x-iterator      | 6                | Yes         | Yes      |
+| with-x-iterator      | 13               | Yes         | Yes      |
 
 [series]: http://series.sourceforge.net/
 [iterate]: https://gitlab.common-lisp.net/iterate/iterate
