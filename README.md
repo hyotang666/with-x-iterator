@@ -9,7 +9,6 @@ Trivial Iterator/Generator.
 | [iterate]            | 54               | Yes         | No       |
 | [for]                | 85               | Yes         | Yes      |
 | [cl-enumeration]     | 33               | Yes         | Yes      |
-| [cl-iterative]       | 17               | Yes         | Yes      |
 | [cl-tertools]        | 36               | Yes         | Yes      |
 | [iterator-protocol]  | 5                | Yes         | Yes      |
 | [doplus]             | 50               | Yes         | No       |
@@ -21,7 +20,6 @@ Trivial Iterator/Generator.
 [iterate]: https://gitlab.common-lisp.net/iterate/iterate
 [for]: https://github.com/Shinmera/for
 [cl-enumeration]: https://gitlab.common-lisp.net/cl-enumeration/enumerations
-[cl-iterative]: https://github.com/mobius-eng/cl-iterative
 [cl-tertools]: https://github.com/mabragor/cl-itertools
 [iterator-protocol]: https://github.com/jaeschliman/com.clearly-useful.iterator-protocol
 [doplus]: https://github.com/alessiostalla/doplus
@@ -45,34 +43,99 @@ E.g. for accumulation, you can use `uiop:while-collecting`.
 
 ```lisp
 (uiop:while-collecting (collect)
-  (do+ ((char (generator "hoge")))
+  (do+ ((char "hoge"))
     ()
     (collect char)))
 => (#\h #\o #\g #\e)
 ```
 
-For usability, a generic-function `generator` is provided.
-`list`, `vector`, `sequence`, `hash-table`, and `integer` is supported.
+For usability and efficiency, with-x-iterator infers the generator types.
+If successfully infers the types from environments, no runtime funcall occurs.
 
 ```lisp
-(uiop:while-collecting (collect)
-  (do+ ((i (generator 5)))
-    ()
-    (collect i)))
-=> (0 1 2 3 4)
+(macroexpand
+  '(do+ ((i '(1 2 3)))
+     ()
+     (print i)))
+
+(LET ((#:TEMP1809 '(1 2 3)) (#:INDEX1810 0))
+  (DECLARE (TYPE (MOD 4611686018427387903) #:INDEX1810))
+  (MACROLET ((#:GENERATE1805 () ; <--- inlined generator.
+               (LET ((?CAR (GENSYM "CAR")))
+                 `(UNLESS (ENDP ,'#:TEMP1809)
+                    (LET ((,?CAR (CAR ,'#:TEMP1809)))
+                      (VALUES (PROG1 T (SETQ ,'#:TEMP1809 (CDR ,'#:TEMP1809)))
+                              (PROG1 ,'#:INDEX1810 (INCF ,'#:INDEX1810))
+                              ,?CAR))))))
+    (BLOCK NIL
+      (TAGBODY
+       #:ITER1806
+        (MULTIPLE-VALUE-BIND (#:G1807 #:KEY1808 I)
+            (#:GENERATE1805)
+          (DECLARE (IGNORE #:KEY1808))
+          (TAGBODY
+            (WHEN (OR (NULL #:G1807) NIL) (RETURN))
+            (PRINT I)
+            (GO #:ITER1806)))))))
 ```
 
-In fact, with-x-iterator is designed as protocol-based.
+If failed to infer the types, fallback to runtime dispatch.
+
+```lisp
+(macroexpand
+  '(do+ ((i int))
+     ()
+     (print i)))
+
+(LET ((#:GENERATOR1969 (GENERATOR INT))) ; <--- Runtime dispatching.
+  (MACROLET ((#:GENERATE1965 ()
+               `(FUNCALL ,'#:GENERATOR1969))) ; <--- Inner loop funcall. Not efficient.
+    (BLOCK NIL
+      (TAGBODY
+       #:ITER1966
+        (MULTIPLE-VALUE-BIND (#:G1967 #:KEY1968 I)
+            (#:GENERATE1965)
+          (DECLARE (IGNORE #:KEY1968))
+          (TAGBODY
+            (WHEN (OR (NULL #:G1967) NIL) (RETURN))
+            (PRINT I)
+            (GO #:ITER1966)))))))
+```
+
+You can use helpers explicitly.
+
+```lisp
+(do+ ((elt (list-generator '(1 2 3))))
+  ()
+  (print elt))
+```
+
+For usability, generic-function `generator` is provided.
+
+```lisp
+(do+ ((elt (generator '(1 2 3))))
+  ()
+  (print elt))
+```
+
+For maxmizing the efficiency, `generator` has compiler macros.
+
+```lisp
+(funcall (compiler-macro-function 'generator) '(generator '(1 2 3)) nil)
+=> (LIST-GENERATOR '(1 2 3))
+```
+
+With-x-iterator is designed as protocol-based.
 Any generator function is acceptable.
 
-For minimize the learning cost, the generator functions protocols are designed as `(FUNCTION () (VALUES Existp Key Value))`.
+For minimizing the learning cost, the generator functions protocols are designed as `(FUNCTION () (VALUES Existp Key Value))`.
 You know this API is inherited from `cl:with-hash-table-iterator`.
 
 To access the `Key` value, `do+` accepts two vars as its bindings.
 
 ```lisp
 (uiop:while-collecting (ks vs)
-  (do+ (((k v) (generator (alexandria:plist-hash-table '(:a :b :c :d)))))
+  (do+ (((k v) (alexandria:plist-hash-table '(:a :b :c :d))))
     ()
     (ks k)
     (vs v)))
@@ -83,14 +146,29 @@ To access the `Key` value, `do+` accepts two vars as its bindings.
 Example of a generator to generate random value.
 ```lisp
 (uiop:while-collecting (acc)
-  (do+ ((random (lambda () (values t t (random 10))))
-        (times (generator 5)))
-    ()
-    (declare (ignore times))
+  (do+ (((times random) (let ((index 0))
+			  (lambda ()
+			    (values t (prog1 index (incf index))
+				    (random 10))))))
+    ((= 5 times))
     (acc random)))
 ```
 
 ## From developer
+### The history.
+
+1. I wrote the structure like `(defstruct struct (data nil :type list))`.
+2. I wrote the code like `(dolist (elt (struct-data struct)) ...)`.
+3. Ooops, I had to change slot data types.
+4. I must change many places in my code base.
+5. I reflected on it, so I wrote tiny abstraction barriar `(defmacro dodata (o) \`(dolist (elt (struct-data ,o)) ...))`.
+6. Ooops, I got name confliction, e.g. `dodata` for `(defstruct obj (data nil :type list))`.
+7. I realized what I want is generic looping.
+8. [series], [iterate] and [doplus] is not good due to not generic.
+9. [cl-enumeration] and [iterator-protocol] are not good due to heavy clos using.
+10. [cl-itertools] and [picl] is built on top of [iterate].
+11. [for] looks fine, by the way, why do these libraries have a huge code base?
+12. [Abstraction will leak](https://en.wikipedia.org/wiki/Leaky_abstraction). [Keep it simple, stupid](https://en.wikipedia.org/wiki/KISS_principle).
 
 ### Product's goal
 
